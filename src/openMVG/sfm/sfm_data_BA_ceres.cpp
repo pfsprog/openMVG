@@ -165,9 +165,17 @@ Bundle_Adjustment_Ceres::ceres_options()
 bool Bundle_Adjustment_Ceres::Adjust
 (
   SfM_Data & sfm_data,     // the SfM scene to refine
-  const Optimize_Options & options
+  const Optimize_Options & options,
+  // modification:: BA object needs to know what type of work is being performed.
+  int workType
 )
 {
+  // modification::-
+  if(workType == 1) {
+
+    OPENMVG_LOG_INFO << "[- Ceres::BA -] 0%";
+  }
+  
   //----------
   // Add camera parameters
   // - intrinsics
@@ -306,6 +314,17 @@ bool Bundle_Adjustment_Ceres::Adjust
     }
   }
 
+  // modification::-
+  if(workType == 1) {
+
+    OPENMVG_LOG_INFO << "[- Ceres::BA -] 25%";
+  }
+
+  if(workType == 2) {
+
+    OPENMVG_LOG_INFO << "[- Ceres::BA -] Global SFM Call Start";
+  }
+
   // Setup Intrinsics data & subparametrization
   for (const auto & intrinsic_it : sfm_data.intrinsics)
   {
@@ -348,6 +367,12 @@ bool Bundle_Adjustment_Ceres::Adjust
     {
       OPENMVG_LOG_ERROR << "Unsupported camera type.";
     }
+  }
+
+  // modification::-
+  if(workType == 1) {
+
+    OPENMVG_LOG_INFO << "[- Ceres::BA -] 50%";
   }
 
   // For all visibility add reprojections errors:
@@ -393,6 +418,12 @@ bool Bundle_Adjustment_Ceres::Adjust
     }
     if (options.structure_opt == Structure_Parameter_Type::NONE)
       problem.SetParameterBlockConstant(structure_landmark_it.second.X.data());
+  }
+
+  // modification::-
+  if(workType == 1) {
+
+    OPENMVG_LOG_INFO << "[- Ceres::BA -] 75%";
   }
 
   if (options.control_point_opt.bUse_control_points)
@@ -484,7 +515,13 @@ bool Bundle_Adjustment_Ceres::Adjust
   ceres_config_options.sparse_linear_algebra_library_type =
     static_cast<ceres::SparseLinearAlgebraLibraryType>(ceres_options_.sparse_linear_algebra_library_type_);
   ceres_config_options.minimizer_progress_to_stdout = ceres_options_.bVerbose_;
-  ceres_config_options.logging_type = ceres::SILENT;
+
+  // modification:: Set Ceres to log something when workType == 3
+  if(workType < 3) {
+
+    ceres_config_options.logging_type = ceres::SILENT;
+  }
+
   ceres_config_options.num_threads = ceres_options_.nb_threads_;
 #if CERES_VERSION_MAJOR < 2
   ceres_config_options.num_linear_solver_threads = ceres_options_.nb_threads_;
@@ -492,10 +529,22 @@ bool Bundle_Adjustment_Ceres::Adjust
   ceres_config_options.parameter_tolerance = ceres_options_.parameter_tolerance_;
   ceres_config_options.gradient_tolerance = ceres_options_.gradient_tolerance_;
 
+  // modification:: Acts as an "Opening tag" for observers of the output stream.
+  if(workType == 3) {
+
+    OPENMVG_LOG_INFO << "[- Ceres::BA -] BAStart";
+  }
 
   // Solve BA
   ceres::Solver::Summary summary;
   ceres::Solve(ceres_config_options, &problem, &summary);
+
+  // modification:: Acts as a "Closing tag" for observers of the output stream.
+  if(workType == 3) {
+
+    OPENMVG_LOG_INFO << "[- Ceres::BA -] BAEnd";
+  }
+
   if (ceres_options_.bCeres_summary_)
     OPENMVG_LOG_INFO << summary.FullReport();
 
@@ -603,6 +652,13 @@ bool Bundle_Adjustment_Ceres::Adjust
         OPENMVG_LOG_INFO << os.str();
       }
     }
+
+    // modification::-
+    if(workType == 1) {
+
+      OPENMVG_LOG_INFO << "[- Ceres::BA -] 100%";
+    }
+
     return true;
   }
 }

@@ -93,6 +93,9 @@ bool SequentialSfMReconstructionEngine2::Process() {
   //- 3. Final bundle Adjustment
   //-------------------
 
+  // modification::-
+  OPENMVG_LOG_INFO << "[- Incremental SFMV2 -] Start";
+
   //--
   //- 1. Init the reconstruction with a Seed
   //--
@@ -147,10 +150,18 @@ bool SequentialSfMReconstructionEngine2::Process() {
   //--
   IndexT resection_round = 0;
 
+  // modification::-
+  OPENMVG_LOG_INFO << "[- Incremental SFMV2 -] PointCamera Refinement";
+
   // Incrementally estimate the pose of the cameras based on a confidence score.
   // The confidence score is based on the track_inlier_ratio.
   // First the camera with the most of 2D-3D overlap are added then we add
   // ones with lower confidence.
+
+  // modification::-
+  size_t view_size = sfm_data_.GetViews().size();
+  OPENMVG_LOG_INFO << "[- Incremental SFMV2 -] Processed Poses: " << sfm_data_.GetPoses().size() / (float)view_size;
+
   const std::array<float, 2> track_inlier_ratios = {0.2, 0.0};
   for (auto track_inlier_ratio = track_inlier_ratios.cbegin();
     track_inlier_ratio < track_inlier_ratios.cend(); ++track_inlier_ratio)
@@ -161,7 +172,9 @@ bool SequentialSfMReconstructionEngine2::Process() {
       // Create new 3D points
       Triangulation();
       // Adjust the scene
-      BundleAdjustment();
+      // modification::
+      // BundleAdjustment();
+      BundleAdjustment(2);
       // Remove unstable triangulations and camera poses
       RemoveOutliers_AngleError(sfm_data_, 2.0);
       RemoveOutliers_PixelResidualError(sfm_data_, 4.0);
@@ -174,6 +187,10 @@ bool SequentialSfMReconstructionEngine2::Process() {
 
       // Stop if no cameras have been added
       // Note: some cameras could have been removed due to instable camera positions.
+
+      // modification::-
+      OPENMVG_LOG_INFO << "[- Incremental SFMV2 -] Processed Poses:" << sfm_data_.GetPoses().size() / (float)view_size;
+
       const IndexT pose_after = sfm_data_.GetPoses().size();
       if (pose_before >= pose_after)
         break;
@@ -183,10 +200,15 @@ bool SequentialSfMReconstructionEngine2::Process() {
     }
   }
 
+  // modification::-
+  OPENMVG_LOG_INFO << "[- Incremental SFMV2 -] Final Refinement";
+
   //--
   //- 3. Final bundle Adjustment
   //--
-  BundleAdjustment();
+  // modification::
+  // BundleAdjustment();
+  BundleAdjustment(3);
 
   //-- Reconstruction done.
   //-- Display some statistics
@@ -504,9 +526,24 @@ bool SequentialSfMReconstructionEngine2::AddingMissingView
   return (pose_after != pose_before);
 }
 
-bool SequentialSfMReconstructionEngine2::BundleAdjustment()
+// modification::
+// bool SequentialSfMReconstructionEngine2::BundleAdjustment()
+bool SequentialSfMReconstructionEngine2::BundleAdjustment(int workType)
 {
   Bundle_Adjustment_Ceres::BA_Ceres_options options;
+
+  int type = 0;
+
+  if(workType == 3) {
+
+    type = workType;
+  }
+
+  if(workType == 2) {
+
+    options.max_num_iterations_ = 10;
+  }
+
   if ( sfm_data_.GetPoses().size() > 100 &&
       (ceres::IsSparseLinearAlgebraLibraryTypeAvailable(ceres::SUITE_SPARSE) ||
        ceres::IsSparseLinearAlgebraLibraryTypeAvailable(ceres::EIGEN_SPARSE))
@@ -528,7 +565,10 @@ bool SequentialSfMReconstructionEngine2::BundleAdjustment()
       Control_Point_Parameter(),
       this->b_use_motion_prior_
     );
-  return bundle_adjustment_obj.Adjust(sfm_data_, ba_refine_options);
+
+  // modification::  
+  // return bundle_adjustment_obj.Adjust(sfm_data_, ba_refine_options);
+  return bundle_adjustment_obj.Adjust(sfm_data_, ba_refine_options, type);
 }
 
 } // namespace sfm
